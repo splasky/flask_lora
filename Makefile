@@ -1,8 +1,8 @@
 export FLASK_APP=src/index.py
 
+install_requirements:
+	pip install -r requirements.txt
 init:
-	export FLASK_APP=src/index.py
-
+	flask initdb
 run:
-	export FLASK_APP=src/index.py
 	flask run
