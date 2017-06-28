@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 # vim:fenc=utf-8
-# Last modified: 2017-06-28 10:13:18
+# Last modified: 2017-06-28 10:18:06
 
 from flask import Flask
 from flask import (Flask, request, session, g, redirect, url_for, abort,
@@ -91,8 +91,6 @@ def check_device_id_exists(device_id: str)->bool:
         device_id)
     try:
         cursor = db_execute(query)
-        import pdb
-        pdb.set_trace()
         if cursor.fetchone() is None:
             return False
     except:
