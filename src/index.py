@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 # vim:fenc=utf-8
-# Last modified: 2017-06-28 10:18:06
+# Last modified: 2017-06-28 18:04:25
 
 from flask import Flask
 from flask import (Flask, request, session, g, redirect, url_for, abort,
@@ -52,51 +52,56 @@ def draw():
         data = decrypt.getdata()
         insert_into_database(device_id, data, abp_key)
         cursor = db_execute("Select dev.device_id, dev.abp_key, data.payload, data.time from Devices dev, "
-                            "Device_Data data where dev.device_id=data.device_id"
-                            ";").fetchall()
+                            "Device_Data data where dev.device_id=data.device_id")
 
         return render_template('history.html', devices=cursor)
     except:
         PrintException()
 
 
-def db_execute(command):
+def db_execute(query, args=(), one=False):
     try:
-        db = get_db()
-        cursor = db.execute(command)
-        return cursor
+        cur = get_db().execute(query, args)
+        rv = cur.fetchall()
+        cur.close()
+        return (rv[0] if rv else None) if one else rv
     except:
-        db.rollback()
         PrintException()
-        print('query string:{}'.format(command))
+        print('query string:{} args:{}'.format(query, args))
+
+
+def insert_db(table, fields=(), values=()):
+    try:
+        cur = get_db()
+        query = 'INSERT INTO %s (%s) VALUES (%s)' % (
+            table,
+            ', '.join(fields),
+            ', '.join(['?'] * len(values))
+        )
+        cur.execute(query, values)
+        cur.commit()
+    except:
+        PrintException()
+        print('query string:{} values:{}'.format(query, values))
 
 
 def insert_into_database(device_id: str, data: str, key: str)->None:
-    db = get_db()
 
     if not check_device_id_exists(device_id):
         if key is not None:
-            db.execute("Insert into Devices(device_id, abp_key) Values(?, ?)", (
-                device_id, key))
-            db.commit()
+            insert_db('Devices', ('device_id', 'abp_key'), (device_id, key))
 
     if data is not None:
-        db.execute(
-            "Insert into Device_Data(device_id, payload) Values(?, ?)", (device_id, data))
-        db.commit()
+        insert_db('Device_Data', ('device_id', 'payload'), (device_id, data))
 
 
 def check_device_id_exists(device_id: str)->bool:
-    query = "select device_id from Devices where device_id='{}';".format(
-        device_id)
-    try:
-        cursor = db_execute(query)
-        if cursor.fetchone() is None:
-            return False
-    except:
-        logging.debug("query failed! query:{}".format(query))
-        PrintException()
-    return True
+    query = "select device_id from Devices where device_id = ?"
+    return_list = db_execute(query, [device_id])
+    if len(return_list) < 1:
+        return False
+    else:
+        return True
 
 
 def get_db():
@@ -114,10 +119,11 @@ def close_connection(exception):
 
 
 def init_db():
-    db = get_db()
-    with app.open_resource(SQLITE_DB_SCHEMA, mode='r') as f:
-        db.cursor().executescript(f.read())
-    db.commit()
+    with app.app_context():
+        db = get_db()
+        with app.open_resource(SQLITE_DB_SCHEMA, mode='r') as f:
+            db.cursor().executescript(f.read())
+        db.commit()
 
 
 @app.cli.command('initdb')
